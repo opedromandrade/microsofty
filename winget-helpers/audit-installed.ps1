@@ -1,222 +1,381 @@
 <#
 .SYNOPSIS
-    Create both emoji-enriched CSV and ASCII-art TXT inventories of apps.
-    Outputs are sorted alphabetically by application name.
-    Primary method: `winget export` → JSON with flat file conversions.
+    Creates emoji-enriched CSV and ASCII-art TXT inventories of apps.
+
+.DESCRIPTION
+    Uses winget export to create an inventory of installed applications.
+    If winget export fails, the script uses winget list as a fallback.
+
 .NOTES
     Run from an elevated PowerShell session.
-    Automatically purges items older than 30 days.
+    Automatically purges files older than 30 days.
 #>
+
+# -------------------------------------------------
+#   Emoji characters
+#   Defined by Unicode code points to prevent encoding errors
+# -------------------------------------------------
+
+$SuccessEmoji = [char]::ConvertFromUtf32(0x2705)
+$WarningEmoji = [char]::ConvertFromUtf32(0x26A0) + [char]::ConvertFromUtf32(0xFE0F)
+$ErrorEmoji   = [char]::ConvertFromUtf32(0x2757)
+$InfoEmoji    = [char]::ConvertFromUtf32(0x2139) + [char]::ConvertFromUtf32(0xFE0F)
+$BoxEmoji     = [char]::ConvertFromUtf32(0x1F4E6)
+$ComputerEmoji = [char]::ConvertFromUtf32(0x1F4BB)
+$GlobeEmoji   = [char]::ConvertFromUtf32(0x1F310)
+$ChatEmoji    = [char]::ConvertFromUtf32(0x1F4AC)
+$MusicEmoji   = [char]::ConvertFromUtf32(0x1F3B5)
+$DocumentEmoji = [char]::ConvertFromUtf32(0x1F4C4)
+$GameEmoji    = [char]::ConvertFromUtf32(0x1F3AE)
+$GearEmoji    = [char]::ConvertFromUtf32(0x2699) + [char]::ConvertFromUtf32(0xFE0F)
+$PackageEmoji = [char]::ConvertFromUtf32(0x1F4E6)
 
 # -------------------------------------------------
 #   Configuration
 # -------------------------------------------------
-$RootPath     = if ($PSScriptRoot) { $PSScriptRoot } else { $pwd.Path }
+
+$RootPath = if ($PSScriptRoot) {
+    $PSScriptRoot
+}
+else {
+    (Get-Location).Path
+}
+
 $ExportFolder = Join-Path $RootPath "reports"
 $LogFolder    = Join-Path $RootPath "logs"
 $TimeStamp    = Get-Date -Format "yyyyMMdd_HHmmss"
 
-$CsvPath  = Join-Path $ExportFolder "winget-inventory_$TimeStamp.csv"
-$TxtPath  = Join-Path $ExportFolder "winget-inventory_$TimeStamp.txt"
-$LogPath  = Join-Path $LogFolder    "audit-winget_$TimeStamp.log"
+$CsvPath = Join-Path $ExportFolder "winget-inventory_$TimeStamp.csv"
+$TxtPath = Join-Path $ExportFolder "winget-inventory_$TimeStamp.txt"
+$LogPath = Join-Path $LogFolder "audit-winget_$TimeStamp.log"
 
 # -------------------------------------------------
-#   Helper – Pretty Logging
+#   Prepare folders
 # -------------------------------------------------
-if (-not (Test-Path $LogFolder))   { New-Item -ItemType Directory -Path $LogFolder   | Out-Null }
-if (-not (Test-Path $ExportFolder)) { New-Item -ItemType Directory -Path $ExportFolder | Out-Null }
+
+if (-not (Test-Path -LiteralPath $LogFolder)) {
+    New-Item -ItemType Directory -Path $LogFolder -Force | Out-Null
+}
+
+if (-not (Test-Path -LiteralPath $ExportFolder)) {
+    New-Item -ItemType Directory -Path $ExportFolder -Force | Out-Null
+}
+
+# -------------------------------------------------
+#   Logging helper
+# -------------------------------------------------
 
 function Write-Log {
-    param(
+    param (
         [string]$Message,
-        [ValidateSet('INFO', 'SUCCESS', 'WARN', 'ERROR')]
-        [string]$Level = 'INFO'
+
+        [ValidateSet("INFO", "SUCCESS", "WARN", "ERROR")]
+        [string]$Level = "INFO"
     )
-    $emoji = switch ($Level) {
-        'SUCCESS' { '[✅ SUCCESS]' }
-        'WARN'    { '[⚠️ WARNING]' }
-        'ERROR'   { '[❗ ERROR]  ' }
-        Default   { '[ℹ️ INFO]   ' }
+
+    switch ($Level) {
+        "SUCCESS" {
+            $LevelLabel = "[$SuccessEmoji SUCCESS]"
+        }
+
+        "WARN" {
+            $LevelLabel = "[$WarningEmoji WARNING]"
+        }
+
+        "ERROR" {
+            $LevelLabel = "[$ErrorEmoji ERROR]  "
+        }
+
+        default {
+            $LevelLabel = "[$InfoEmoji INFO]   "
+        }
     }
-    $entry = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | $emoji | $Message"
-    $entry | Tee-Object -FilePath $LogPath -Append
+
+    $Entry = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | $LevelLabel | $Message"
+    $Entry | Tee-Object -FilePath $LogPath -Append
 }
 
 # -------------------------------------------------
-#   Helper – Dynamic Emoji Mapping
+#   Application emoji helper
 # -------------------------------------------------
+
 function Get-AppEmoji {
-    param([string]$Id, [string]$Name)
-    $lowerId = $Id.ToLower()
-    $lowerName = $Name.ToLower()
+    param (
+        [string]$Id,
+        [string]$Name
+    )
 
-    if ($lowerId -match 'python|git|powertoys|docker|vscode|visualstudio|terminal|developer|sdk|node') { return "💻" } # Dev/Sys Tools
-    if ($lowerId -match 'browser|chrome|edge|firefox|opera|brave|vivaldi') { return "🌐" }                          # Browsers
-    if ($lowerId -match 'discord|teams|zoom|slack|whatsapp|messenger|telegram') { return "💬" }                     # Chat/Comms
-    if ($lowerId -match 'spotify|vlc|music|video|player|plex|netflix|obs') { return "🎵" }                          # Media
-    if ($lowerId -match 'office|excel|word|notion|adobe|reader|pdf|7zip|winrar') { return "📄" }                    # Office/Utility
-    if ($lowerId -match 'steam|epic|xbox|game|gog|origin') { return "🎮" }                                          # Gaming
-    if ($lowerId -match 'nvidia|amd|intel|driver|hardware|logitech') { return "⚙️" }                                # Drivers/Hardware
-    return "📦"                                                                                                     # Generic App
+    $LowerId = if ($Id) {
+        $Id.ToLower()
+    }
+    else {
+        ""
+    }
+
+    $LowerName = if ($Name) {
+        $Name.ToLower()
+    }
+    else {
+        ""
+    }
+
+    $SearchText = "$LowerId $LowerName"
+
+    if ($SearchText -match "python|git|powertoys|docker|vscode|visualstudio|terminal|developer|sdk|node") {
+        return $ComputerEmoji
+    }
+
+    if ($SearchText -match "browser|chrome|edge|firefox|opera|brave|vivaldi") {
+        return $GlobeEmoji
+    }
+
+    if ($SearchText -match "discord|teams|zoom|slack|whatsapp|messenger|telegram") {
+        return $ChatEmoji
+    }
+
+    if ($SearchText -match "spotify|vlc|music|video|player|plex|netflix|obs") {
+        return $MusicEmoji
+    }
+
+    if ($SearchText -match "office|excel|word|notion|adobe|reader|pdf|7zip|winrar") {
+        return $DocumentEmoji
+    }
+
+    if ($SearchText -match "steam|epic|xbox|game|gog|origin") {
+        return $GameEmoji
+    }
+
+    if ($SearchText -match "nvidia|amd|intel|driver|hardware|logitech") {
+        return $GearEmoji
+    }
+
+    return $PackageEmoji
 }
 
 # -------------------------------------------------
-#   Helper – ASCII Art Title Generator
+#   ASCII-art title generator
 # -------------------------------------------------
+
 function Get-AsciiHeader {
-    $art = @"
+    $Art = @"
 ========================================================================
- __          __ _         __      __             _                    
- \ \        / /(_)        \ \    / /            | |                   
-  \ \  /\  / /  _  _ __    \ \  / /___  _ __  _ | |_  ___   _ __  _   _ 
+ __          __ _         __      __             _
+ \ \        / /(_)        \ \    / /            | |
+  \ \  /\  / /  _  _ __    \ \  / /___  _ __  _ | |_  ___   _ __  _   _
    \ \/  \/ /  | || '_ \    \ \/ // _ \| '__|| \| __|/ _ \ | '__|| | | |
     \  /\  /   | || | | |    \  /|  __/| |   | | |_| (_) | |     | |_| |
      \/  \/    |_||_| |_|     \/  \___||_|   |_|\__|\___/|_|      \__, |
                                                                    __/ |
-                                                                  |___/ 
+                                                                  |___/
 ========================================================================
- Inventory Created : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+ Inventory Created : $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
  Target Scope      : WinGet Managed Repository Sources Only
- Status            : Verified Consistent & Alphabetized
+ Status            : Verified Consistent and Alphabetized
 ========================================================================
 
 "@
-    return $art
+
+    return $Art
 }
 
+# -------------------------------------------------
+#   Start
+# -------------------------------------------------
 
-Write-Log "Initializing automated WinGet asset tracking pipeline." -Level INFO
+Write-Log "Initializing automated WinGet asset tracking pipeline."
 
 # -------------------------------------------------
-#   Retention Cleanup (Older than 30 Days)
+#   Retention cleanup
 # -------------------------------------------------
-Write-Log "Scanning directories for files older than 30 days..." -Level INFO
+
+Write-Log "Scanning directories for files older than 30 days."
+
 $CutoffDate = (Get-Date).AddDays(-30)
-
 $TargetPaths = @($ExportFolder, $LogFolder)
-$PurgeCount  = 0
+$PurgeCount = 0
 
 foreach ($Target in $TargetPaths) {
-    if (Test-Path $Target) {
-        $ExpiredFiles = Get-ChildItem -Path $Target -File | Where-Object { $_.LastWriteTime -lt $CutoffDate }
+    if (Test-Path -LiteralPath $Target) {
+        $ExpiredFiles = Get-ChildItem -LiteralPath $Target -File |
+            Where-Object {
+                $_.LastWriteTime -lt $CutoffDate
+            }
+
         foreach ($File in $ExpiredFiles) {
             try {
-                Remove-Item $File.FullName -Force -ErrorAction Stop
+                Remove-Item -LiteralPath $File.FullName -Force -ErrorAction Stop
                 $PurgeCount++
             }
             catch {
-                Write-Log "Failed to purge obsolete file: $($File.Name) ($($_.Exception.Message))" -Level WARN
+                Write-Log "Failed to purge obsolete file: $($File.Name) - $($_.Exception.Message)" -Level WARN
             }
         }
     }
 }
+
 if ($PurgeCount -gt 0) {
     Write-Log "Retention check complete. Purged $PurgeCount expired file(s)." -Level SUCCESS
-} else {
-    Write-Log "Retention check complete. No expired files found." -Level INFO
+}
+else {
+    Write-Log "Retention check complete. No expired files found."
 }
 
 # -------------------------------------------------
-#   1️⃣ Primary Engine – Winget JSON Parser
+#   Primary engine - WinGet JSON parser
 # -------------------------------------------------
-$tempJson = [IO.Path]::GetTempFileName()
+
+$TempJson = [System.IO.Path]::GetTempFileName()
+$PrimarySucceeded = $false
+
 try {
-    winget export --source winget --output $tempJson --include-versions --accept-source-agreements 2>$null
+    Write-Log "Running WinGet export."
 
-    if (Test-Path $tempJson) {
-        $jsonContent = Get-Content $tempJson -Raw
-        $data = $jsonContent | ConvertFrom-Json
-        $packages = $data.Sources.Packages
-        
-        if ($null -ne $packages -and $packages.Count -gt 0) {
-            Write-Log "WinGet parsed metadata accurately. found $($packages.Count) managed installations." -Level SUCCESS
-            
-            # Map object dataset, SORT, and prepend categorical emojis
-            $normalizedOutput = $packages | ForEach-Object {
-                $rawId   = $_.PackageIdentifier
-                $rawName = $_.PackageIdentifier.Split('.')[-1]
-                $ico     = Get-AppEmoji -Id $rawId -Name $rawName
-                
-                [PSCustomObject]@{
-                    Type      = $ico
-                    Name      = $rawName
-                    Id        = $rawId
-                    Version   = $_.PackageVersion
-                    Publisher = $_.PackageIdentifier.Split('.')[0]
-                }
-            } | Sort-Object Name
+    winget export `
+        --source winget `
+        --output $TempJson `
+        --include-versions `
+        --accept-source-agreements 2>$null
 
-            # Export #1: CSV Document Structure with dedicated Type Emoji column
-            $normalizedOutput | Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8
+    $ExportExitCode = $LASTEXITCODE
+
+    if ($ExportExitCode -eq 0 -and (Test-Path -LiteralPath $TempJson)) {
+        $JsonContent = Get-Content -LiteralPath $TempJson -Raw
+        $Data = $JsonContent | ConvertFrom-Json
+        $Packages = @($Data.Sources.Packages)
+
+        if ($Packages.Count -gt 0) {
+            Write-Log "WinGet parsed metadata accurately. Found $($Packages.Count) managed installation(s)." -Level SUCCESS
+
+            $NormalizedOutput = $Packages |
+                ForEach-Object {
+                    $RawId = $_.PackageIdentifier
+
+                    if ([string]::IsNullOrWhiteSpace($RawId)) {
+                        return
+                    }
+
+                    $RawName = ($RawId -split "\.")[-1]
+                    $Icon = Get-AppEmoji -Id $RawId -Name $RawName
+
+                    [PSCustomObject]@{
+                        Type      = $Icon
+                        Name      = $RawName
+                        Id        = $RawId
+                        Version   = $_.PackageVersion
+                        Publisher = ($RawId -split "\.")[0]
+                    }
+                } |
+                Sort-Object Name
+
+            # CSV export
+            $NormalizedOutput |
+                Export-Csv -LiteralPath $CsvPath -NoTypeInformation -Encoding UTF8
+
             Write-Log "Structured alphabetical CSV catalog generated at: $CsvPath" -Level SUCCESS
 
-            # Export #2: Pretty-aligned TXT Document View with an ASCII header banner
-            $asciiHeader = Get-AsciiHeader
-            $tableData = $normalizedOutput | Format-Table -AutoSize | Out-String
-            
-            Set-Content -Path $TxtPath -Value ($asciiHeader + $tableData) -Encoding UTF8
+            # TXT export
+            $AsciiHeader = Get-AsciiHeader
+            $TableData = $NormalizedOutput |
+                Format-Table -AutoSize |
+                Out-String
+
+            Set-Content `
+                -LiteralPath $TxtPath `
+                -Value ($AsciiHeader + $TableData) `
+                -Encoding UTF8
+
             Write-Log "Readable alphabetical TXT snapshot generated at: $TxtPath" -Level SUCCESS
 
-            Remove-Item $tempJson -Force
-            exit 0
+            $PrimarySucceeded = $true
         }
         else {
             Write-Log "WinGet engine emitted an empty manifest block." -Level WARN
         }
     }
+    else {
+        Write-Log "WinGet export failed with exit code $ExportExitCode." -Level WARN
+    }
 }
 catch {
-    Write-Log "Core script module failure: ($($_.Exception.Message)). Dropping down to fallback loop." -Level ERROR
+    Write-Log "Core script module failure: $($_.Exception.Message). Falling back to text processing." -Level ERROR
 }
 finally {
-    if (Test-Path $tempJson) { Remove-Item $tempJson -Force }
+    if (Test-Path -LiteralPath $TempJson) {
+        Remove-Item -LiteralPath $TempJson -Force
+    }
+}
+
+if ($PrimarySucceeded) {
+    exit 0
 }
 
 # -------------------------------------------------
-#   2️⃣ Emergency Fallback Engine – Text Intercept
+#   Emergency fallback engine - text processing
 # -------------------------------------------------
-Write-Log "Executing textual fall-back diagnostic scrape." -Level WARN
 
-$raw = winget list --source winget --accept-source-agreements 2>$null
+Write-Log "Executing textual fallback diagnostic scrape." -Level WARN
 
-if ($raw) {
-    $cleanLines = $raw | Where-Object { $_ -match '\S' }
-    
-    # Process text output, skip header fields, inject emoji attributes, and sort
-    $fallbackObjects = $cleanLines | Select-Object -Skip 2 | ForEach-Object {
-        $parts = $_ -split '\s{2,}'
-        if ($parts.Count -ge 3) {
-            $rawId   = $parts[1].Trim()
-            $rawName = $parts[0].Trim()
-            $ico     = Get-AppEmoji -Id $rawId -Name $rawName
+$Raw = winget list `
+    --source winget `
+    --accept-source-agreements 2>$null
 
-            [PSCustomObject]@{
-                Type      = $ico
-                Name      = $rawName
-                Id        = $rawId
-                Version   = $parts[2].Trim()
-                Publisher = $rawId.Split('.')[0]
-            }
+if ($Raw) {
+    $CleanLines = $Raw |
+        Where-Object {
+            $_ -match "\S"
         }
-    } | Sort-Object Name
 
-    if ($fallbackObjects.Count -gt 0) {
-        # Fallback Export #1: CSV
-        $fallbackObjects | Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8
+    $FallbackObjects = $CleanLines |
+        Select-Object -Skip 2 |
+        ForEach-Object {
+            $Parts = $_ -split "\s{2,}"
+
+            if ($Parts.Count -ge 3) {
+                $RawName = $Parts[0].Trim()
+                $RawId = $Parts[1].Trim()
+                $RawVersion = $Parts[2].Trim()
+                $Icon = Get-AppEmoji -Id $RawId -Name $RawName
+
+                [PSCustomObject]@{
+                    Type      = $Icon
+                    Name      = $RawName
+                    Id        = $RawId
+                    Version   = $RawVersion
+                    Publisher = ($RawId -split "\.")[0]
+                }
+            }
+        } |
+        Where-Object {
+            $null -ne $_
+        } |
+        Sort-Object Name
+
+    if (@($FallbackObjects).Count -gt 0) {
+        # CSV fallback export
+        $FallbackObjects |
+            Export-Csv -LiteralPath $CsvPath -NoTypeInformation -Encoding UTF8
+
         Write-Log "Fallback alphabetical CSV approximation built successfully." -Level SUCCESS
 
-        # Fallback Export #2: Pretty TXT layout with ASCII title
-        $asciiHeader = Get-AsciiHeader
-        $tableData = $fallbackObjects | Format-Table -AutoSize | Out-String
-        
-        Set-Content -Path $TxtPath -Value ($asciiHeader + $tableData) -Encoding UTF8
+        # TXT fallback export
+        $AsciiHeader = Get-AsciiHeader
+        $TableData = $FallbackObjects |
+            Format-Table -AutoSize |
+            Out-String
+
+        Set-Content `
+            -LiteralPath $TxtPath `
+            -Value ($AsciiHeader + $TableData) `
+            -Encoding UTF8
+
         Write-Log "Fallback alphabetical TXT snapshot built successfully." -Level SUCCESS
-    } else {
+    }
+    else {
         Write-Log "Fallback loop failed to extract meaningful text tokens." -Level ERROR
         exit 1
     }
 }
 else {
-    Write-Log "Terminal execution breakdown. WinGet interface was totally unreachable." -Level ERROR
+    Write-Log "Terminal execution breakdown. WinGet interface was unreachable." -Level ERROR
     exit 1
 }
