@@ -1,6 +1,7 @@
 Mozilla.Firefox.ESR
 PeterPawlowski.foobar2000
 PeterPawlowski.foobar2000.EncoderPack
+gchudov.CUETools
 Sony.MusicCenter
 FlorianHeidenreich.Mp3tag
 AndreWiethoff.ExactAudioCopy
@@ -12,6 +13,7 @@ IrfanSkiljan.IrfanView
 IrfanSkiljan.IrfanView.PlugIns
 calibre.calibre
 Sigil-Ebook.Sigil
+Betterbird.Betterbird
 qBittorrent.qBittorrent
 Notepad++.Notepad++
 RARLab.WinRAR
