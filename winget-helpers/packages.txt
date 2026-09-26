@@ -9,6 +9,7 @@ CodecGuide.K-LiteCodecPack.Standard
 clsid2.mpc-hc
 LIGHTNINGUK.ImgBurn
 PrivateInternetAccess.PrivateInternetAccess
+Proton.ProtonVPN
 IrfanSkiljan.IrfanView
 IrfanSkiljan.IrfanView.PlugIns
 calibre.calibre
@@ -16,7 +17,9 @@ Sigil-Ebook.Sigil
 Betterbird.Betterbird
 qBittorrent.qBittorrent
 Notepad++.Notepad++
-RARLab.WinRAR
+JohnMacFarlane.Pandoc
+Microsoft.VisualStudioCode
 7zip.7zip
+RARLab.WinRAR
 SumatraPDF.SumatraPDF
 SDAssociation.SDMemoryCardFormatter
