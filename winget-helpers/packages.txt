@@ -1,4 +1,5 @@
 Mozilla.Firefox.ESR
+Betterbird.Betterbird
 Obsidian.Obsidian
 Notepad++.Notepad++
 JohnMacFarlane.Pandoc
@@ -19,9 +20,8 @@ PrivateInternetAccess.PrivateInternetAccess
 Proton.ProtonVPN
 calibre.calibre
 Sigil-Ebook.Sigil
-Betterbird.Betterbird
+aMule.aMule.Portable
 qBittorrent.qBittorrent
-
 7zip.7zip
 RARLab.WinRAR
 SDAssociation.SDMemoryCardFormatter
