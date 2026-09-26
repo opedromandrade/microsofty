@@ -5,6 +5,8 @@ Notepad++.Notepad++
 JohnMacFarlane.Pandoc
 Microsoft.VisualStudioCode
 SumatraPDF.SumatraPDF
+calibre.calibre
+Sigil-Ebook.Sigil
 PeterPawlowski.foobar2000
 gchudov.CUETools
 AndreWiethoff.ExactAudioCopy
@@ -18,8 +20,6 @@ IrfanSkiljan.IrfanView.PlugIns
 LIGHTNINGUK.ImgBurn
 PrivateInternetAccess.PrivateInternetAccess
 Proton.ProtonVPN
-calibre.calibre
-Sigil-Ebook.Sigil
 aMule.aMule.Portable
 qBittorrent.qBittorrent
 7zip.7zip
