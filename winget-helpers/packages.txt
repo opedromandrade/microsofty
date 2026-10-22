@@ -17,6 +17,8 @@ CodecGuide.K-LiteCodecPack.Standard
 clsid2.mpc-hc
 IrfanSkiljan.IrfanView
 IrfanSkiljan.IrfanView.PlugIns
+darktable.darktable
+KDE.digiKam
 LIGHTNINGUK.ImgBurn
 PrivateInternetAccess.PrivateInternetAccess
 Proton.ProtonVPN
