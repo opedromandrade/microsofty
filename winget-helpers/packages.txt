@@ -23,7 +23,6 @@ XnSoft.XnViewMP
 LIGHTNINGUK.ImgBurn
 PrivateInternetAccess.PrivateInternetAccess
 Proton.ProtonVPN
-Proton.ProtonDrive
 aMule.aMule.Portable
 qBittorrent.qBittorrent
 7zip.7zip
