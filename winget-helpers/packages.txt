@@ -18,7 +18,6 @@ clsid2.mpc-hc
 IrfanSkiljan.IrfanView
 IrfanSkiljan.IrfanView.PlugIns
 darktable.darktable
-KDE.digiKam
 XnSoft.XnViewMP
 LIGHTNINGUK.ImgBurn
 PrivateInternetAccess.PrivateInternetAccess
