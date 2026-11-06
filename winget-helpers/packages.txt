@@ -17,7 +17,6 @@ CodecGuide.K-LiteCodecPack.Standard
 clsid2.mpc-hc
 IrfanSkiljan.IrfanView
 IrfanSkiljan.IrfanView.PlugIns
-darktable.darktable
 XnSoft.XnViewMP
 LIGHTNINGUK.ImgBurn
 PrivateInternetAccess.PrivateInternetAccess
